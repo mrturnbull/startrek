@@ -20,9 +20,9 @@ import org.apache.cxf.transport.http.*;
 
 public class StarTrek {
 
+	private static final String STAPI_BASE_PATH = "http://stapi.co/api/v1/rest/";
 	private static final int MAX_PAGE_SIZE = 100;
-	private static final int TOTAL_CHARACTERS = 5907; //IT IS MUTABLE !!!!!!!!
-	private static final int TOTAL_CHARACTER_PAGES = 60;
+	private static int TOTAL_CHARACTER_PAGES = 60;
 	private Map catalog;
 	private Map dict;
 
@@ -129,7 +129,9 @@ public class StarTrek {
 
 		if (tokenInput.matches("@|#|$|%")) throw new Exception("Unsupported character(s) in your name");
 
-		tokenInput = tokenInput.replaceAll("tlh", "@").replaceAll("ch", "#").replaceAll("gh", "$").replaceAll("ng", "%");
+		tokenInput = tokenInput.replaceAll("(?i)tlh", "@").replaceAll("(?i)ch", "#").replaceAll("(?i)gh", "$").replaceAll("(?i)ng", "%");
+
+		//System.out.println(tokenInput);
 
 		String tokenOutput = "";
 		for (int i = 0; i < tokenInput.length(); i++){
@@ -151,9 +153,36 @@ public class StarTrek {
 
 	public int estimatePage(String token){
 
+		String url = STAPI_BASE_PATH + "character/search";
+		url += "?";
+		url += "pageNumber=1";
+		url += "&pageSize=1";
+
+		Client client = ClientBuilder.newClient().register(JacksonJsonProvider.class);
+
+		WebTarget webTarget = client.target(url);
+
+		Builder builder = webTarget.request();
+
+
+
+		Response response = builder.accept(MediaType.APPLICATION_JSON).get();
+
+		if (response.getStatus() == 200) {
+
+			PageView pageView = (PageView) builder.get(PageView.class);
+
+			TOTAL_CHARACTER_PAGES = pageView.getPage().getTotalPages() / MAX_PAGE_SIZE + 1;
+
+		}
+
 		String firstLetter = token.substring(0, 1).toUpperCase();
 
 		float page = TOTAL_CHARACTER_PAGES * (((float) catalog.get(firstLetter))/ 26.0f);
+
+		response.close();
+		client.close();
+
 		return Math.round(page);
 		//return 1;
 
@@ -163,7 +192,7 @@ public class StarTrek {
 
 		// = new String[];
 
-		String url = "http://stapi.co/api/v1/rest/character/search";
+		String url = STAPI_BASE_PATH + "character/search";
 		url += "?";
 		url += "pageNumber=" + pageNumber;
 		url += "&pageSize=" + MAX_PAGE_SIZE;
@@ -220,7 +249,7 @@ public class StarTrek {
 
 		// = new String[];
 
-		String url = "http://stapi.co/api/v1/rest/character";
+		String url = STAPI_BASE_PATH + "character";
 		url += "?";
 		url += "uid=" + uid;
 
@@ -260,38 +289,40 @@ public class StarTrek {
     extension.registerConduitInitiator("http://cxf.apache.org/transports/http", new HTTPTransportFactory());
 	}
 
-  	public void identifySpecies(String token){
+	public void identifySpecies(String token){
 
-			initializeCxf();
+		initializeCxf();
 
-			int initialPage = estimatePage(token);
-			String species = "";
-			boolean speciesFound = false;
-			for (int currentPage = initialPage; (currentPage <= TOTAL_CHARACTER_PAGES) && !speciesFound; currentPage++){
+		System.out.print("#");
+		int initialPage = estimatePage(token);
+		String species = "";
+		boolean speciesFound = false;
 
-				//System.out.println("Current Page = " + currentPage);
+		for (int currentPage = initialPage; (currentPage <= TOTAL_CHARACTER_PAGES) && !speciesFound; currentPage++){
 
-	  		List<Character> listCharacterWanted = getCharactersByPage(token, currentPage);
+			System.out.print("#");
 
-				for (Character characterWanted : listCharacterWanted) {
+  		List<Character> listCharacterWanted = getCharactersByPage(token, currentPage);
 
-					//System.out.println("uid found = " + characterWanted.getUid());
-					System.out.println("Full name found: " + characterWanted.getName());
+			for (Character characterWanted : listCharacterWanted) {
 
-					species = getSpeciesByCharacter(characterWanted.getUid());
+				//System.out.println("uid found = " + characterWanted.getUid());
+				System.out.println("\nFull name found: " + characterWanted.getName());
 
-					System.out.println("Species: " + ((species.length() > 0) ? species: "N/A"));
+				species = getSpeciesByCharacter(characterWanted.getUid());
 
-					if (!species.equals("")) {
-						speciesFound = true;
-						break;
-					}
+				System.out.println("Species: " + ((species.length() > 0) ? species: "N/A"));
 
+				if (!species.equals("")) {
+					speciesFound = true;
+					break;
 				}
 
 			}
 
-  	}
+		}
+
+	}
 
 
 	public static void main (String args[]){
@@ -303,8 +334,11 @@ public class StarTrek {
 			starTrek.identifySpecies(args[0]);
 		}
 		catch(Exception e){
+			System.out.println();
 			System.out.println(e.getMessage());
 		}
+
+		System.out.println();
 
 	}
 
